@@ -1,0 +1,15 @@
+{
+  "name": "king-desktop-app",
+  "version": "1.0.0",
+  "description": "KING Desktop Launcher",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "author": "Muhammad Taqi",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0"
+  }
+}
