@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dynamic Launcher</title>
+    <title>KING App Launcher</title>
     <style>
         :root {
             --bg-color: #0d1117;
@@ -183,7 +183,7 @@
 
     <div class="container">
         <div class="header">
-            <span class="badge">ROCK-AI LAUNCHER</span>
+            <span class="badge">KING APP LAUNCHER</span>
             <div class="app-title" id="app-subtitle">Connecting to target...</div>
         </div>
 
@@ -206,18 +206,28 @@
     </div>
 
     <script>
-        // Exact RAW URL of your repository
         const GITHUB_JSON_URL = "https://raw.githubusercontent.com/muhammadtaqi512q-oss/ROCK-AI/main/links.json";
 
         function getRouteKey() {
-            let hostname = window.location.hostname || "nexura.king";
+            // Extract from URL Search Parameters (?key=nexura or ?button=nexura)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('key')) return urlParams.get('key').toLowerCase();
-            
+            if (urlParams.has('button')) return urlParams.get('button').toLowerCase();
+
+            // Extract from Custom Scheme Deep Link (mt://nexura)
+            let href = window.location.href;
+            if (href.startsWith("mt://")) {
+                let path = href.replace("mt://", "").split('?')[0].split('/')[0];
+                if (path) return path.toLowerCase();
+            }
+
+            // Extract Subdomain Prefix if Web View
+            let hostname = window.location.hostname || "nexura";
             let parts = hostname.split('.');
             if (parts.length > 0 && parts[0] !== 'www' && parts[0] !== '') {
                 return parts[0].toLowerCase();
             }
+
             return "nexura";
         }
 
@@ -226,17 +236,13 @@
             let linkData = null;
 
             try {
-                // Fetch direct array/object from ROCK-AI repository
                 const response = await fetch(GITHUB_JSON_URL + '?t=' + new Date().getTime());
-                if (!response.ok) throw new Error("Fetch failed");
+                if (!response.ok) throw new Error("Network error");
                 const data = await response.json();
 
-                // Array support (e.g. [{"name": "nexura", "link": "https://..."}])
                 if (Array.isArray(data)) {
                     linkData = data.find(item => item.name && item.name.toLowerCase() === key);
-                } 
-                // Object support (e.g. {"nexura": {"link": "https://..."}})
-                else if (data[key]) {
+                } else if (data[key]) {
                     linkData = data[key];
                 }
             } catch (err) {
@@ -254,7 +260,7 @@
                 const targetUrl = linkData.link || linkData.target_url;
 
                 targetTitle.innerText = targetName.toUpperCase();
-                appSubtitle.innerText = "Target Found";
+                appSubtitle.innerText = "Target Ready";
                 btnText.innerText = "OPEN " + targetName.toUpperCase();
                 btnSpinner.style.display = "none";
                 launchBtn.disabled = false;
@@ -266,8 +272,8 @@
                 };
             } else {
                 targetTitle.innerText = key.toUpperCase();
-                appSubtitle.innerText = "Not Found";
-                btnText.innerText = "NO LINK MAPPED";
+                appSubtitle.innerText = "Link Not Configured";
+                btnText.innerText = "NO TARGET FOUND";
                 btnSpinner.style.display = "none";
             }
         }
