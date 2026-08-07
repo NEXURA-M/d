@@ -1,5 +1,5 @@
-name: Build Clean APK with Icon 
- 
+name: Build Clean APK with Icon & Deep Link
+
 on:
   push:
     branches: [ main ]
@@ -28,7 +28,7 @@ jobs:
         run: |
           npm install -g cordova
           
-          # 1. Create Cordova project with Lyramoon 
+          # 1. Create Cordova project
           cordova create app com.lyra.nexura "KING"
           
           # 2. Copy Web Source
@@ -40,9 +40,35 @@ jobs:
             sed -i '/<\/widget>/i \    <icon src="www/icon.png" />' app/config.xml
           fi
           
-          # 4. Add Android Platform & Build
+          # 4. Add Android Platform
           cd app
           cordova platform add android
+
+          # 5. Inject mt:// Deep Link Intent Filter into AndroidManifest.xml
+          PYTHON_SCRIPT=$(cat << 'EOF'
+          import xml.etree.ElementTree as ET
+
+          manifest_path = 'platforms/android/app/src/main/AndroidManifest.xml'
+          ET.register_namespace('android', 'http://schemas.android.com/apk/res/android')
+          tree = ET.parse(manifest_path)
+          root = tree.getroot()
+
+          application = root.find('application')
+          activity = application.find('activity')
+
+          # Add Intent Filter for mt:// Custom Scheme
+          intent_filter = ET.SubElement(activity, 'intent-filter')
+          ET.SubElement(intent_filter, 'action', {'{http://schemas.android.com/apk/res/android}name': 'android.intent.action.VIEW'})
+          ET.SubElement(intent_filter, 'category', {'{http://schemas.android.com/apk/res/android}name': 'android.intent.category.DEFAULT'})
+          ET.SubElement(intent_filter, 'category', {'{http://schemas.android.com/apk/res/android}name': 'android.intent.category.BROWSABLE'})
+          ET.SubElement(intent_filter, 'data', {'{http://schemas.android.com/apk/res/android}scheme': 'mt'})
+
+          tree.write(manifest_path, encoding='utf-8', xml_declaration=True)
+          EOF
+          )
+          python3 -c "$PYTHON_SCRIPT"
+          
+          # 6. Build Debug APK
           cordova build android --debug
 
       - name: Upload APK
