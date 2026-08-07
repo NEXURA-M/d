@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Light Windows EXE
 
 on:
   push:
@@ -13,22 +13,34 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache-dependency-path: package-lock.json
-
-      - name: Install Dependencies
+      - name: Create C# Wrapper Script
         run: |
-          npm install --no-audit --no-fund
+          @'
+          using System;
+          using System.Diagnostics;
+          using System.Windows.Forms;
 
-      - name: Build Windows EXE via Electron Packager
+          namespace KingApp {
+              static class Program {
+                  [STAThread]
+                  static void Main() {
+                      Application.EnableVisualStyles();
+                      Process.Start(new ProcessStartInfo {
+                          FileName = "cmd.exe",
+                          Arguments = "/c start msedge --app=https://nexura.oneapp.dev",
+                          WindowStyle = ProcessWindowStyle.Hidden
+                      });
+                  }
+              }
+          }
+          '@ | Out-File -Encoding utf8 app.cs
+
+      - name: Compile C# to EXE
         run: |
-          npx electron-builder --win --x64 -c.config=false
+          C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:KING.exe app.cs
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KING-Desktop-EXE
-          path: dist/*.exe
+          path: KING.exe
