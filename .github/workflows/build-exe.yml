@@ -1,4 +1,4 @@
-name: Build Light Windows EXE
+name: JoyMix
 
 on:
   push:
@@ -13,6 +13,23 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Convert PNG Icon to ICO
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $pngPath = "icon.png"
+          $icoPath = "app.ico"
+          if (Test-Path $pngPath) {
+              $bmp = [System.Drawing.Bitmap]::FromFile($pngPath)
+              $hIcon = $bmp.GetHicon()
+              $icon = [System.Drawing.Icon]::FromHandle($hIcon)
+              $stream = [System.IO.File]::Create($icoPath)
+              $icon.Save($stream)
+              $stream.Close()
+              Write-Host "Icon successfully converted to app.ico"
+          } else {
+              Write-Host "Warning: icon.png not found, skipping icon compilation."
+          }
+
       - name: Create C# Wrapper Script
         run: |
           @'
@@ -20,14 +37,14 @@ jobs:
           using System.Diagnostics;
           using System.Windows.Forms;
 
-          namespace KingApp {
+          namespace JoyMixApp {
               static class Program {
                   [STAThread]
                   static void Main() {
                       Application.EnableVisualStyles();
                       Process.Start(new ProcessStartInfo {
                           FileName = "cmd.exe",
-                          Arguments = "/c start msedge --app=https://nexura.oneapp.dev",
+                          Arguments = "/c start msedge --app=https://joymix1.oneapp.dev",
                           WindowStyle = ProcessWindowStyle.Hidden
                       });
                   }
@@ -37,10 +54,14 @@ jobs:
 
       - name: Compile C# to EXE
         run: |
-          C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:KING.exe app.cs
+          if (Test-Path "app.ico") {
+              C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /win32icon:app.ico /out:JoyMix.exe app.cs
+          } else {
+              C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:JoyMix.exe app.cs
+          }
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KING-Desktop-EXE
-          path: KING.exe
+          name: JoyMix-Desktop-EXE
+          path: JoyMix.exe
