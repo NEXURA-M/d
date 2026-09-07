@@ -1,4 +1,4 @@
-name: JoyMix
+name: Build Light Windows EXE
 
 on:
   push:
@@ -13,25 +13,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create ICO Icon from PNG
-        run: |
-          if (Test-Path "icon.png") {
-              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-              Install-Module -Name ImageMagick -Force -Scope CurrentUser
-              magick convert icon.png -define icon:auto-resize=256,128,64,48,32,16 app.ico
-              Write-Host "Successfully generated app.ico"
-          } else {
-              Write-Host "Warning: icon.png not found."
-          }
-
-      - name: Verify ICO Created
-        run: |
-          if (Test-Path "app.ico") {
-              Write-Host "app.ico exists and is ready for compilation."
-          } else {
-              Write-Host "app.ico was not created."
-          }
-
       - name: Create C# Wrapper Script
         run: |
           @'
@@ -39,7 +20,7 @@ jobs:
           using System.Diagnostics;
           using System.Windows.Forms;
 
-          namespace JoyMixApp {
+          namespace jomixApp {
               static class Program {
                   [STAThread]
                   static void Main() {
@@ -56,11 +37,7 @@ jobs:
 
       - name: Compile C# to EXE
         run: |
-          if (Test-Path "app.ico") {
-              C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /win32icon:app.ico /out:JoyMix.exe app.cs
-          } else {
-              C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:JoyMix.exe app.cs
-          }
+          C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:JoyMix.exe app.cs
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
