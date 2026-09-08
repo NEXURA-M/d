@@ -1,1 +1,154 @@
-ok
+name: VIBE PRO
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create ICO Icon from PNG
+        run: |
+          if (Test-Path "icon.png") {
+              magick convert icon.png -define icon:auto-resize=256,128,64,48,32,16 app.ico
+              Write-Host "Successfully generated app.ico"
+          } else {
+              Write-Host "Warning: icon.png not found."
+          }
+
+      - name: Create Local File Server & WebView2 Script
+        run: |
+          @'
+          using System;
+          using System.IO;
+          using System.Net;
+          using System.Text;
+          using System.Threading;
+          using System.Windows.Forms;
+          using Microsoft.Web.WebView2.WinForms;
+          using Microsoft.Web.WebView2.Core;
+
+          namespace VibeProApp {
+              static class Program {
+                  private static HttpListener listener;
+                  private static string port = "8080";
+
+                  [STAThread]
+                  static void Main() {
+                      Application.EnableVisualStyles();
+                      Application.SetCompatibleTextRenderingDefault(false);
+
+                      // Start Local Web Server
+                      StartLocalServer();
+
+                      // Create App Window
+                      Form form = new Form {
+                          Text = "VIBE PRO",
+                          Width = 1024,
+                          Height = 768,
+                          StartPosition = FormStartPosition.CenterScreen,
+                          FormBorderStyle = FormBorderStyle.Sizable
+                      };
+
+                      WebView2 webView = new WebView2 { Dock = DockStyle.Fill };
+                      form.Controls.Add(webView);
+
+                      form.Load += async (s, e) => {
+                          await webView.EnsureCoreWebView2Async(null);
+                          
+                          // Security Settings: Disable Context Menu (Right Click)
+                          webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                          // Disable DevTools (F12 / Ctrl+Shift+I)
+                          webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+
+                          // Block Keyboard Shortcuts (F12, Ctrl+U, Ctrl+S, etc.)
+                          webView.CoreWebView2.AcceleratorKeyPressed += (sender, args) => {
+                              var key = args.VirtualKey;
+                              bool ctrl = (Control.ModifierKeys & Keys.Control) == Keys.Control;
+                              
+                              if (key == 123 || // F12
+                                 (ctrl && key == (uint)Keys.U) || // Ctrl+U
+                                 (ctrl && key == (uint)Keys.S) || // Ctrl+S
+                                 (ctrl && key == (uint)Keys.P) || // Ctrl+P
+                                 (ctrl && key == (uint)Keys.I))   // Ctrl+Shift+I / Ctrl+I
+                              {
+                                  args.Handled = true; // Block action
+                              }
+                          };
+
+                          webView.Source = new Uri("http://localhost:" + port + "/index.html");
+                      };
+
+                      Application.Run(form);
+                  }
+
+                  static void StartLocalServer() {
+                      ThreadPool.QueueUserWorkItem((o) => {
+                          listener = new HttpListener();
+                          listener.Prefixes.Add("http://localhost:" + port + "/");
+                          listener.Start();
+
+                          while (listener.IsListening) {
+                              try {
+                                  var context = listener.GetContext();
+                                  string relativePath = context.Request.Url.AbsolutePath.TrimStart('/');
+                                  if (string.IsNullOrEmpty(relativePath)) relativePath = "index.html";
+
+                                  string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, relativePath);
+
+                                  if (File.Exists(filePath)) {
+                                      byte[] buffer = File.ReadAllBytes(filePath);
+                                      context.Response.ContentLength64 = buffer.Length;
+                                      context.Response.OutputStream.Write(buffer, 0, buffer.Length);
+                                  } else {
+                                      context.Response.StatusCode = 404;
+                                  }
+                                  context.Response.OutputStream.Close();
+                              } catch { }
+                          }
+                      });
+                  }
+              }
+          }
+          '@ | Out-File -Encoding utf8 app.cs
+
+      - name: Download WebView2 DLL
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.1823.42 -OutputDirectory .
+          Copy-Item "Microsoft.Web.WebView2.*\lib\net45\Microsoft.Web.WebView2.WinForms.dll" -Destination "."
+          Copy-Item "Microsoft.Web.WebView2.*\lib\net45\Microsoft.Web.WebView2.Core.dll" -Destination "."
+          Copy-Item "Microsoft.Web.WebView2.*\runtimes\win-x64\native\WebView2Loader.dll" -Destination "."
+
+      - name: Compile C# App
+        run: |
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          $refs = "/r:System.Windows.Forms.dll,/r:System.dll,/r:Microsoft.Web.WebView2.WinForms.dll,/r:Microsoft.Web.WebView2.Core.dll"
+          
+          if (Test-Path "app.ico") {
+              & $csc /target:winexe /win32icon:app.ico $refs /out:VIBE_PRO.exe app.cs
+          } else {
+              & $csc /target:winexe $refs /out:VIBE_PRO.exe app.cs
+          }
+
+      - name: Zip Executable and Assets
+        run: |
+          New-Item -ItemType Directory -Path "BuildRelease"
+          Copy-Item "VIBE_PRO.exe" -Destination "BuildRelease\"
+          Copy-Item "WebView2Loader.dll" -Destination "BuildRelease\"
+          Copy-Item "Microsoft.Web.WebView2.WinForms.dll" -Destination "BuildRelease\"
+          Copy-Item "Microsoft.Web.WebView2.Core.dll" -Destination "BuildRelease\"
+          
+          # Copy all HTML, PNG, CSS, JS files to release directory
+          Get-ChildItem -Include *.html,*.png,*.css,*.js,*.jpg -Recurse | Copy-Item -Destination "BuildRelease\"
+
+      - name: Upload Desktop App Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIBE-PRO-Desktop-App
+          path: BuildRelease/
